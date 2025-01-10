@@ -1,7 +1,7 @@
 # Dash Google OAuth
 
-This is a simple library using Google OAuth to authenticate and view a Dash app
-written based on [dash-auth](https://github.com/plotly/dash-auth).
+This is a fork of the work by Hossein Jazayeri that implements a simple library using Google OAuth to authenticate and view a Dash app, 
+based on [dash-auth](https://github.com/plotly/dash-auth). 
 Upon authentication, a cookie is created and kept for 2 weeks.
 
 ### Setup
@@ -10,7 +10,7 @@ with `/login/callback` as authorized redirect URL i.e. `http://localhost:5000/lo
 
 Install the package:
 ```
-$ pip install dash-google-oauth
+$ pip install git+https://github.com/DR-Barros/dash-google-oauth.git
 ```
 Define following environment variables:
 ```

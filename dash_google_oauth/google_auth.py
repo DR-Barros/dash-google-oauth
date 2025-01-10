@@ -24,7 +24,10 @@ class GoogleAuth(Auth):
 
         @app.server.route('/login/callback')
         def callback():
-            return self.login_callback()
+            if not self.is_authorized():
+                return self.login_callback()
+            return flask.redirect('/')
+
 
         @app.server.route('/logout')
         def logout():
@@ -56,7 +59,7 @@ class GoogleAuth(Auth):
     def auth_wrapper(self, f):
         def wrap(*args, **kwargs):
             if not self.is_authorized():
-                return flask.Response(status=403)
+                return flask.redirect('/login/callback')
 
             response = f(*args, **kwargs)
             return response
