@@ -7,6 +7,7 @@ from .auth import Auth
 
 COOKIE_EXPIRY = 60 * 60 * 24 * 14
 COOKIE_AUTH_USER_NAME = 'AUTH-USER'
+COOKIE_AUTH_USER_EMAIL = 'AUTH-EMAIL'
 COOKIE_AUTH_ACCESS_TOKEN = 'AUTH-TOKEN'
 
 AUTH_STATE_KEY = 'auth_state'
@@ -17,8 +18,33 @@ AUTH_REDIRECT_URI = os.environ.get('GOOGLE_AUTH_REDIRECT_URI')
 
 
 class GoogleAuth(Auth):
-    def __init__(self, app):
+    """
+    Google OAuth2 authentication for Dash apps
+    to initialize your Dash app with Google OAuth2 authentication, use this class as follows:
+    ```python
+    from dash import Dash
+    from dash_google_oauth import GoogleAuth
+
+    app = Dash(__name__)
+    auth = GoogleAuth(app, allowed_emails=['example.com'])
+    ```
+    to use this class, you need to set the following environment variables:
+    - GOOGLE_AUTH_CLIENT_ID: Google OAuth2 client ID
+    - GOOGLE_AUTH_CLIENT_SECRET: Google OAuth2 client secret
+    - GOOGLE_AUTH_SCOPE: Google OAuth2 scope
+    - GOOGLE_AUTH_URL: Google OAuth2 authorization URL
+    - GOOGLE_AUTH_TOKEN_URI: Google OAuth2 token URL
+    - GOOGLE_AUTH_USER_INFO_URL: Google OAuth2 user info URL
+    - GOOGLE_AUTH_REDIRECT_URI: Redirect URI for Google OAuth2
+    - FLASK_SECRET_KEY: Flask secret key
+    """
+    def __init__(self, app, allowed_emails=None):
+        """
+        :param app: Dash app
+        :param allowed_emails: List of allowed email domains
+        """
         Auth.__init__(self, app)
+        self.allowed_emails = allowed_emails
         app.server.config['SECRET_KEY'] = os.environ.get('FLASK_SECRET_KEY')
         app.server.config['SESSION_TYPE'] = 'filesystem'
 
@@ -26,6 +52,8 @@ class GoogleAuth(Auth):
         def callback():
             if not self.is_authorized():
                 return self.login_callback()
+            url = flask.session.get('URL_REQUEST')
+            print('Redirecting to', url)
             return flask.redirect('/')
 
 
@@ -49,6 +77,7 @@ class GoogleAuth(Auth):
         )
 
         uri, state = session.create_authorization_url(os.environ.get('GOOGLE_AUTH_URL'))
+        
 
         flask.session['REDIRECT_URL'] = flask.request.url
         flask.session[AUTH_STATE_KEY] = state
@@ -59,6 +88,8 @@ class GoogleAuth(Auth):
     def auth_wrapper(self, f):
         def wrap(*args, **kwargs):
             if not self.is_authorized():
+                print('Not authorized', flask.request.url)
+                flask.session['URL_REQUEST'] = flask.request.url
                 return flask.redirect('/login/callback')
 
             response = f(*args, **kwargs)
@@ -99,8 +130,12 @@ class GoogleAuth(Auth):
             resp = google.get(os.environ.get('GOOGLE_AUTH_USER_INFO_URL'))
             if resp.status_code == 200:
                 user_data = resp.json()
+                email_dom = user_data["email"].split('@')[1]
+                if self.allowed_emails and email_dom not in self.allowed_emails:
+                    return 'You are not allowed to access this application.'
                 r = flask.redirect(flask.session['REDIRECT_URL'])
                 r.set_cookie(COOKIE_AUTH_USER_NAME, user_data['name'], max_age=COOKIE_EXPIRY)
+                r.set_cookie(COOKIE_AUTH_USER_EMAIL, user_data['email'], max_age=COOKIE_EXPIRY)
                 r.set_cookie(COOKIE_AUTH_ACCESS_TOKEN, token['access_token'], max_age=COOKIE_EXPIRY)
                 flask.session[user_data['name']] = token['access_token']
                 return r
