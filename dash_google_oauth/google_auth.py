@@ -50,10 +50,9 @@ class GoogleAuth(Auth):
 
         @app.server.route('/login/callback')
         def callback():
+            print('callback')
             if not self.is_authorized():
                 return self.login_callback()
-            url = flask.session.get('URL_REQUEST')
-            print('Redirecting to', url)
             return flask.redirect('/')
 
 
@@ -64,11 +63,13 @@ class GoogleAuth(Auth):
     def is_authorized(self):
         user = flask.request.cookies.get(COOKIE_AUTH_USER_NAME)
         token = flask.request.cookies.get(COOKIE_AUTH_ACCESS_TOKEN)
-        if not user or not token:
+        email = flask.request.cookies.get(COOKIE_AUTH_USER_EMAIL)
+        if not user or not token or not email:
             return False
         return flask.session.get(user) == token
 
     def login_request(self):
+        print('login_request')
         session = OAuth2Session(
             CLIENT_ID,
             CLIENT_SECRET,
@@ -81,6 +82,7 @@ class GoogleAuth(Auth):
 
         flask.session['REDIRECT_URL'] = flask.request.url
         flask.session[AUTH_STATE_KEY] = state
+        print('state:', state)
         flask.session.permanent = True
 
         return flask.redirect(uri, code=302)
@@ -88,8 +90,6 @@ class GoogleAuth(Auth):
     def auth_wrapper(self, f):
         def wrap(*args, **kwargs):
             if not self.is_authorized():
-                print('Not authorized', flask.request.url)
-                flask.session['URL_REQUEST'] = flask.request.url
                 return flask.redirect('/login/callback')
 
             response = f(*args, **kwargs)
@@ -102,20 +102,25 @@ class GoogleAuth(Auth):
             if self.is_authorized():
                 return original_index(*args, **kwargs)
             else:
-                return self.login_request()
+                return flask.redirect('/login/callback')
 
         return wrap
 
     def login_callback(self):
+        print('login_callback')
         if 'error' in flask.request.args:
             if flask.request.args.get('error') == 'access_denied':
+                print('You denied access.')
                 return 'You denied access.'
+            print('Error encountered.')
             return 'Error encountered.'
 
         if 'code' not in flask.request.args and 'state' not in flask.request.args:
+            print('Code or state not provided.', flask.request.args, flask.session[AUTH_STATE_KEY])
             return self.login_request()
         else:
             # user is successfully authenticated
+            print(flask.session[AUTH_STATE_KEY])
             google = self.__get_google_auth(state=flask.session[AUTH_STATE_KEY])
             try:
                 token = google.fetch_token(
@@ -124,13 +129,15 @@ class GoogleAuth(Auth):
                     authorization_response=flask.request.url
                 )
             except Exception as e:
-                return e.__dict__
+                print("Error fetching token: ", e)
+                return self.login_request()
 
             google = self.__get_google_auth(token=token)
             resp = google.get(os.environ.get('GOOGLE_AUTH_USER_INFO_URL'))
             if resp.status_code == 200:
                 user_data = resp.json()
                 email_dom = user_data["email"].split('@')[1]
+                print(email_dom)
                 if self.allowed_emails and email_dom not in self.allowed_emails:
                     return 'You are not allowed to access this application.'
                 r = flask.redirect(flask.session['REDIRECT_URL'])
@@ -139,7 +146,7 @@ class GoogleAuth(Auth):
                 r.set_cookie(COOKIE_AUTH_ACCESS_TOKEN, token['access_token'], max_age=COOKIE_EXPIRY)
                 flask.session[user_data['name']] = token['access_token']
                 return r
-
+            print('Could not fetch your information.')
             return 'Could not fetch your information.'
 
     @staticmethod
@@ -162,4 +169,5 @@ class GoogleAuth(Auth):
         r = flask.redirect('/')
         r.delete_cookie(COOKIE_AUTH_USER_NAME)
         r.delete_cookie(COOKIE_AUTH_ACCESS_TOKEN)
+        r.delete_cookie(COOKIE_AUTH_USER_EMAIL)
         return r
