@@ -46,8 +46,3 @@ auth = GoogleAuth(app)
 You have access to `/logout` route in order to logout user by making a `GET` request.
 
 User's name stored in cookie: `flask.request.cookies.get('AUTH-USER')`
-
-
-### Bugs
-
-There is a bug where the key AUTH_STATE_KEY changes during the registration waiting period, forcing the user to log in twice.
