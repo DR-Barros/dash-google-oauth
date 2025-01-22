@@ -129,7 +129,7 @@ class GoogleAuth(Auth):
                 email_dom = user_data["email"].split('@')[1]
                 if self.allowed_emails and email_dom not in self.allowed_emails:
                     return 'You are not allowed to access this application.'
-                r = flask.redirect(flask.session['REDIRECT_URL'])
+                r = flask.redirect(flask.session.get('REDIRECT_URL', '/'))
                 r.set_cookie(COOKIE_AUTH_USER_NAME, user_data['name'], max_age=COOKIE_EXPIRY)
                 r.set_cookie(COOKIE_AUTH_USER_EMAIL, user_data['email'], max_age=COOKIE_EXPIRY)
                 r.set_cookie(COOKIE_AUTH_ACCESS_TOKEN, token['access_token'], max_age=COOKIE_EXPIRY)
